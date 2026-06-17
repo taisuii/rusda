@@ -129,10 +129,12 @@ for arch in x86 x86_64 arm arm64; do
     fi
 
     # rusda-gadget: rusda-gadget-17.6.2-android-arm.so.xz
-    # 按 arch 位宽精确选择，避免 64 位构建误选 lib/rusda/32 下的模拟 gadget (issue #9)
+    # 按 arch 位宽精确选择，避免 64 位构建误选 32 位「模拟」gadget (issue #9)。
+    # 用 find 兼容不同 frida 版本的资源目录：老版 lib/rusda/{32,64}/，
+    # 新版(17.14+) lib/rusda-<api_version>/{32,64}/。
     bits="$(gadget_bits_for_arch "$arch")"
-    gadget="$staging/lib/rusda/${bits}/rusda-gadget.so"
-    if [ -n "$bits" ] && [ -f "$gadget" ]; then
+    gadget="$(find "$staging/lib" -path "*/${bits}/rusda-gadget.so" 2>/dev/null | head -1)"
+    if [ -n "$bits" ] && [ -n "$gadget" ] && [ -f "$gadget" ]; then
         assert_elf_arch "$gadget" "$arch"
         echo "  rusda-gadget-${VERSION}-android-${arch}.so.xz"
         xz -c -T0 "$gadget" > "${OUTPUT_DIR}/rusda-gadget-${VERSION}-android-${arch}.so.xz"
