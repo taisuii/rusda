@@ -1,0 +1,26 @@
+diff --git a/gum/gum.c b/gum/gum.c
+index 58e83a9..b838544 100644
+--- a/gum/gum.c
++++ b/gum/gum.c
+@@ -302,7 +302,7 @@ gum_init_embedded (void)
+   g_log_set_default_handler (gum_on_log_message, NULL);
+   gum_do_init ();
+ 
+-  g_set_prgname ("frida");
++  g_set_prgname ("russell");
+ 
+ #if defined (HAVE_LINUX) && defined (HAVE_GLIBC)
+   gum_libdl_prevent_unload ();
+diff --git a/tests/core/mapper.c b/tests/core/mapper.c
+index 39407f0..a974086 100644
+--- a/tests/core/mapper.c
++++ b/tests/core/mapper.c
+@@ -110,7 +110,7 @@ main (gint argc,
+   destructor =
+       GSIZE_TO_POINTER (gum_darwin_mapper_destructor (mapper));
+   entrypoint =
+-      GSIZE_TO_POINTER (gum_darwin_mapper_resolve (mapper, "frida_agent_main"));
++      GSIZE_TO_POINTER (gum_darwin_mapper_resolve (mapper, "main"));
+ 
+   g_timer_start (timer);
+   constructor ();

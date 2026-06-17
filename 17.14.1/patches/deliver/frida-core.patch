@@ -1,0 +1,609 @@
+diff --git a/.gitignore b/.gitignore
+index b366e10..1307f24 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -19,3 +19,5 @@
+ /src/linux/helpers/build/
+ /src/linux/helpers/ext/
+ /subprojects/*
++*.deps
++*.vapi
+diff --git a/compat/build.py b/compat/build.py
+index 556f34b..d37913d 100644
+--- a/compat/build.py
++++ b/compat/build.py
+@@ -238,28 +238,28 @@ def setup(role: Role,
+                 if "helper" in components:
+                     outputs[group] += [
+                         Output(identifier=f"helper_{kind}",
+-                               name=f"frida-helper-{other_arch}",
++                               name=f"rusda-helper-{other_arch}",
+                                file=HELPER_FILE_UNIX,
+                                target=HELPER_TARGET),
+                     ]
+                 if "agent" in components:
+                     outputs[group] += [
+                         Output(identifier=f"agent_{kind}",
+-                               name=f"frida-agent-{other_arch}.dylib",
++                               name=f"rusda-agent-{other_arch}.dylib",
+                                file=AGENT_FILE_DARWIN,
+                                target=AGENT_TARGET),
+                     ]
+                 if "gadget" in components:
+                     outputs[group] += [
+                         Output(identifier=f"gadget_{kind}",
+-                               name=f"frida-gadget-{other_arch}.dylib",
++                               name=f"rusda-gadget-{other_arch}.dylib",
+                                file=GADGET_FILE_DARWIN,
+                                target=GADGET_TARGET),
+                     ]
+                 if "server" in components and assets == "installed":
+                     outputs[group] += [
+                         Output(identifier=f"server_{kind}",
+-                               name=f"frida-server-{other_arch}",
++                               name=f"rusda-server-{other_arch}",
+                                file=SERVER_FILE_UNIX,
+                                target=SERVER_TARGET),
+                     ]
+@@ -346,14 +346,14 @@ def setup(role: Role,
+             if host_os == "android" and host_arch in {"x86_64", "x86"} and "agent" in components:
+                 outputs[OutputGroup("arm")] = [
+                     Output(identifier="agent_emulated_legacy",
+-                           name="frida-agent-arm.so",
++                           name="rusda-agent-arm.so",
+                            file=AGENT_FILE_ELF,
+                            target=AGENT_TARGET),
+                 ]
+                 if host_arch == "x86_64":
+                     outputs[OutputGroup("arm64")] = [
+                         Output(identifier="agent_emulated_modern",
+-                               name="frida-agent-arm64.so",
++                               name="rusda-agent-arm64.so",
+                                file=AGENT_FILE_ELF,
+                                target=AGENT_TARGET),
+                     ]
+@@ -802,21 +802,21 @@ OVERRIDDEN_COMPAT_OPTIONS = {
+ }
+ 
+ HELPER_TARGET = "frida-helper"
+-HELPER_FILE_WINDOWS = Path("src") / "frida-helper.exe"
+-HELPER_FILE_UNIX = Path("src") / "frida-helper"
++HELPER_FILE_WINDOWS = Path("src") / "rusda-helper.exe"
++HELPER_FILE_UNIX = Path("src") / "rusda-helper"
+ 
+ AGENT_TARGET = "frida-agent"
+-AGENT_FILE_WINDOWS = Path("lib") / "agent" / "frida-agent.dll"
+-AGENT_FILE_DARWIN = Path("lib") / "agent" / "frida-agent.dylib"
+-AGENT_FILE_ELF = Path("lib") / "agent" / "frida-agent.so"
++AGENT_FILE_WINDOWS = Path("lib") / "agent" / "rusda-agent.dll"
++AGENT_FILE_DARWIN = Path("lib") / "agent" / "rusda-agent.dylib"
++AGENT_FILE_ELF = Path("lib") / "agent" / "rusda-agent.so"
+ 
+ GADGET_TARGET = "frida-gadget"
+-GADGET_FILE_WINDOWS = Path("lib") / "gadget" / "frida-gadget.dll"
+-GADGET_FILE_DARWIN = Path("lib") / "gadget" / "frida-gadget.dylib"
+-GADGET_FILE_ELF = Path("lib") / "gadget" / "frida-gadget.so"
++GADGET_FILE_WINDOWS = Path("lib") / "gadget" / "rusda-gadget.dll"
++GADGET_FILE_DARWIN = Path("lib") / "gadget" / "rusda-gadget.dylib"
++GADGET_FILE_ELF = Path("lib") / "gadget" / "rusda-gadget.so"
+ 
+ SERVER_TARGET = "frida-server"
+-SERVER_FILE_UNIX = Path("server") / "frida-server"
++SERVER_FILE_UNIX = Path("server") / "rusda-server"
+ 
+ MSVS_ENVVARS = {
+     "PLATFORM",
+diff --git a/inject/meson.build b/inject/meson.build
+index 713c731..240ca2d 100644
+--- a/inject/meson.build
++++ b/inject/meson.build
+@@ -17,8 +17,8 @@ raw_inject = executable('frida-inject-raw', inject_sources,
+ 
+ custom_target('frida-inject',
+   input: [raw_inject, 'frida-inject.xcent'],
+-  output: 'frida-inject' + exe_suffix,
+-  command: post_process + ['executable', 're.frida.Inject', '@INPUT1@'],
++  output: 'rusda-inject' + exe_suffix,
++  command: post_process + ['executable', 're.rusda.Inject', '@INPUT1@'],
+   install: true,
+   install_dir: get_option('bindir'),
+ )
+diff --git a/lib/agent/agent.vala b/lib/agent/agent.vala
+index f99f31f..3449f4a 100644
+--- a/lib/agent/agent.vala
++++ b/lib/agent/agent.vala
+@@ -363,7 +363,7 @@ namespace Frida.Agent {
+ 		}
+ 
+ 		private void keep_running_eternalized () {
+-			agent_gthread = new Thread<bool> ("frida-eternal-agent", () => {
++			agent_gthread = new Thread<bool> (Obfuscate.decode_hex_xor ("33273c313478302130273b3439783432303b21"), () => {
+ 				var ignore_scope = new ThreadIgnoreScope (FRIDA_THREAD);
+ 
+ 				agent_tid = Gum.Process.get_current_thread_id ();
+@@ -559,7 +559,7 @@ namespace Frida.Agent {
+ 					assert_not_reached ();
+ 				}
+ 			} else {
+-				agent_gthread = new Thread<bool> ("frida-eternal-agent", () => {
++				agent_gthread = new Thread<bool> (Obfuscate.decode_hex_xor ("33273c313478302130273b3439783432303b21"), () => {
+ 					var ignore_scope = new ThreadIgnoreScope (FRIDA_THREAD);
+ 					run_after_transition ();
+ 					ignore_scope = null;
+@@ -667,7 +667,7 @@ namespace Frida.Agent {
+ 					assert_not_reached ();
+ 				}
+ 			} else {
+-				agent_gthread = new Thread<bool> ("frida-eternal-agent", () => {
++				agent_gthread = new Thread<bool> (Obfuscate.decode_hex_xor ("33273c313478302130273b3439783432303b21"), () => {
+ 					var ignore_scope = new ThreadIgnoreScope (FRIDA_THREAD);
+ 					run_after_transition ();
+ 					ignore_scope = null;
+@@ -1429,7 +1429,7 @@ namespace Frida.Agent {
+ 
+ 				emulated_bridge_state = new BridgeState (parameters.str);
+ 
+-				emulated_worker = new Thread<void> ("frida-agent-emulated", run_emulated_agent);
++				emulated_worker = new Thread<void> (Obfuscate.decode_hex_xor ("33273c3134783432303b21783038203934213031"), run_emulated_agent);
+ 
+ 				var connection = yield new DBusConnection (stream, ServerGuid.HOST_SESSION_SERVICE,
+ 					AUTHENTICATION_SERVER | AUTHENTICATION_ALLOW_ANONYMOUS, null, cancellable);
+diff --git a/lib/base/linux.vala b/lib/base/linux.vala
+index 6e915e5..2fcfe2f 100644
+--- a/lib/base/linux.vala
++++ b/lib/base/linux.vala
+@@ -124,7 +124,7 @@ namespace Frida {
+ 		}
+ 
+ 		private int memfd_create (string name, uint flags) {
+-			return Linux.syscall (LinuxSyscall.MEMFD_CREATE, name, flags);
++			return Linux.syscall (LinuxSyscall.MEMFD_CREATE, "jit-cache", flags);
+ 		}
+ 	}
+ 
+diff --git a/lib/base/meson.build b/lib/base/meson.build
+index 10eb920..ca7bb74 100644
+--- a/lib/base/meson.build
++++ b/lib/base/meson.build
+@@ -5,6 +5,7 @@ base_sources = [
+   'channel.vala',
+   'service.vala',
+   'stream.vala',
++  'obfuscate.vala',
+   'rpc.vala',
+   'p2p.vala',
+   'p2p-glue.c',
+diff --git a/lib/base/obfuscate.vala b/lib/base/obfuscate.vala
+new file mode 100644
+index 0000000..5665e80
+--- /dev/null
++++ b/lib/base/obfuscate.vala
+@@ -0,0 +1,25 @@
++namespace Frida {
++	/**
++	 * 运行时解码特征字符串，避免二进制中出现 frida 相关字面量，规避内存扫描。
++	 * 支持 XOR / Base58 等编码，可替换实现。
++	 */
++	namespace Obfuscate {
++		private const uint8 XOR_KEY = 0x55;
++
++		/**
++		 * 从 hex 编码的 XOR 密文解码字符串。
++		 * 编译期仅保留 hex 字面量，运行时还原真实字符串。
++		 */
++		public static string decode_hex_xor (string hex) {
++			var len = hex.length / 2;
++			var sb = new StringBuilder.sized (len);
++			for (var i = 0; i < len; i++) {
++				int64 val;
++				int64.try_parse (hex.substring (i * 2, 2), out val, null, 16);
++				var b = (uint8) val;
++				sb.append_c ((char) (b ^ XOR_KEY));
++			}
++			return sb.str;
++		}
++	}
++}
+diff --git a/lib/base/p2p.vala b/lib/base/p2p.vala
+index abe5255..c4a2248 100644
+--- a/lib/base/p2p.vala
++++ b/lib/base/p2p.vala
+@@ -889,7 +889,7 @@ namespace Frida {
+ 		string? result_cert_pem = null;
+ 		string? result_key_pem = null;
+ 
+-		new Thread<bool> ("frida-generate-certificate", () => {
++		new Thread<bool> (Obfuscate.decode_hex_xor ("33273c31347832303b302734213078363027213c333c36342130"), () => {
+ 			uint8[] local_cert_der;
+ 			string local_cert_pem;
+ 			string local_key_pem;
+diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
+index 97edecf..edd34cc 100644
+--- a/lib/base/rpc.vala
++++ b/lib/base/rpc.vala
+@@ -22,6 +22,11 @@ namespace Frida {
+ 			Object (peer: peer);
+ 		}
+ 
++		private static string get_rpc_str (bool quoted) {
++			var s = Obfuscate.decode_hex_xor ("33273c31346f272536");
++			return quoted ? "\"" + s + "\"" : s;
++		}
++
+ 		/**
+ 		 * Calls a remote method and waits for its result.
+ 		 *
+@@ -36,7 +41,7 @@ namespace Frida {
+ 			var request = new Json.Builder ();
+ 			request
+ 				.begin_array ()
+-				.add_string_value ("frida:rpc")
++				.add_string_value (get_rpc_str (false))
+ 				.add_string_value (request_id)
+ 				.add_string_value ("call")
+ 				.add_string_value (method)
+@@ -96,7 +101,7 @@ namespace Frida {
+ 		 * @return true if the message was an RPC message and was handled
+ 		 */
+ 		public bool try_handle_message (string json) {
+-			if (json.index_of ("\"frida:rpc\"") == -1)
++			if (json.index_of (get_rpc_str (true)) == -1)
+ 				return false;
+ 
+ 			var parser = new Json.Parser ();
+@@ -125,7 +130,7 @@ namespace Frida {
+ 				return false;
+ 
+ 			string? type = rpc_message.get_element (0).get_string ();
+-			if (type == null || type != "frida:rpc")
++			if (type == null || type != get_rpc_str (false))
+ 				return false;
+ 
+ 			var request_id_value = rpc_message.get_element (1);
+diff --git a/lib/base/xpc.vala b/lib/base/xpc.vala
+index 8e7e483..7a1079e 100644
+--- a/lib/base/xpc.vala
++++ b/lib/base/xpc.vala
+@@ -243,7 +243,7 @@ namespace Frida {
+ 				description = description[:description.length - 1];
+ 
+ 			throw (Error) new GLib.Error.literal (
+-				Quark.from_string ("frida-error-quark"),
++				Quark.from_string (Obfuscate.decode_hex_xor ("33273c3134783027273a2778242034273e")),
+ 				translate_error (domain, code, description),
+ 				description);
+ 		}
+diff --git a/lib/gadget/gadget.vala b/lib/gadget/gadget.vala
+index 230284c..8989410 100644
+--- a/lib/gadget/gadget.vala
++++ b/lib/gadget/gadget.vala
+@@ -580,7 +580,7 @@ namespace Frida.Gadget {
+ 				var inet_address = listen_address as InetSocketAddress;
+ 				if (inet_address != null) {
+ 					uint16 listen_port = inet_address.get_port ();
+-					Environment.set_thread_name ("frida-gadget-tcp-%u".printf (listen_port));
++					Environment.set_thread_name ("%s%u".printf (Obfuscate.decode_hex_xor ("33273c3134783234313230217821362578"), listen_port));
+ 					if (request != null) {
+ 						request.set_value (listen_port);
+ 					} else {
+@@ -591,7 +591,7 @@ namespace Frida.Gadget {
+ 				} else {
+ #if !WINDOWS
+ 					var unix_address = (UnixSocketAddress) listen_address;
+-					Environment.set_thread_name ("frida-gadget-unix");
++					Environment.set_thread_name (Obfuscate.decode_hex_xor ("33273c31347832343132302178203b3c2d"));
+ 					if (request != null) {
+ 						request.set_value (0);
+ 					} else {
+diff --git a/meson.build b/meson.build
+index bc5b560..6a7f707 100644
+--- a/meson.build
++++ b/meson.build
+@@ -220,11 +220,11 @@ else
+   shlib_suffix = '.so'
+ endif
+ 
+-helper_name = 'frida-helper' + exe_suffix
+-agent_name = 'frida-agent' + shlib_suffix
+-gadget_name = 'frida-gadget' + shlib_suffix
++helper_name = 'rusda-helper' + exe_suffix
++agent_name = 'rusda-agent' + shlib_suffix
++gadget_name = 'rusda-gadget' + shlib_suffix
+ 
+-frida_libdir_name = f'frida-@api_version@'
++frida_libdir_name = f'rusda-@api_version@'
+ root_asset_dir = get_option('libdir') / frida_libdir_name
+ if host_os_family == 'darwin'
+   asset_dir = root_asset_dir
+diff --git a/server/meson.build b/server/meson.build
+index 8f24cbe..aa4bec3 100644
+--- a/server/meson.build
++++ b/server/meson.build
+@@ -41,13 +41,13 @@ raw_server = executable('frida-server-raw', server_sources,
+   dependencies: server_deps,
+ )
+ 
+-server_name = 'frida-server' + exe_suffix
++server_name = 'rusda-server' + exe_suffix
+ need_universal_server = assets_mode == 'installed' and server_compat != ''
+ 
+ server = custom_target('frida-server',
+   input: [raw_server, 'frida-server.xcent'],
+   output: need_universal_server ? f'@server_name@-@host_abi@' : server_name,
+-  command: post_process + ['executable', 're.frida.Server', '@INPUT1@'],
++  command: post_process + ['executable', 're.rusda.Server', '@INPUT1@'],
+   install: true,
+   install_dir: get_option('bindir'),
+ )
+diff --git a/server/server.vala b/server/server.vala
+index 0d72d59..b758bad 100644
+--- a/server/server.vala
++++ b/server/server.vala
+@@ -1,7 +1,7 @@
+ namespace Frida.Server {
+ 	private static Application application;
+ 
+-	private const string DEFAULT_DIRECTORY = "re.frida.server";
++	private const string DEFAULT_DIRECTORY = "re.rusda.server";
+ 	private static bool output_version = false;
+ 	private static string? device_id = null;
+ 	private static string? listen_address = null;
+diff --git a/src/agent-container.vala b/src/agent-container.vala
+index eecfa1f..86eb9f4 100644
+--- a/src/agent-container.vala
++++ b/src/agent-container.vala
+@@ -28,7 +28,7 @@ namespace Frida {
+ 			}
+ 
+ 			void * main_func_symbol;
+-			var main_func_found = container.module.symbol ("frida_agent_main", out main_func_symbol);
++			var main_func_found = container.module.symbol ("main", out main_func_symbol);
+ 			assert (main_func_found);
+ 			container.main_impl = (AgentMainFunc) main_func_symbol;
+ 
+diff --git a/src/darwin/darwin-host-session.vala b/src/darwin/darwin-host-session.vala
+index 2033982..3d0b348 100644
+--- a/src/darwin/darwin-host-session.vala
++++ b/src/darwin/darwin-host-session.vala
+@@ -295,7 +295,7 @@ namespace Frida {
+ 		private async uint inject_agent (uint pid, string agent_parameters, Cancellable? cancellable) throws Error, IOError {
+ 			uint id;
+ 
+-			unowned string entrypoint = "frida_agent_main";
++			unowned string entrypoint = "main";
+ #if HAVE_EMBEDDED_ASSETS
+ 			id = yield fruitjector.inject_library_resource (pid, agent, entrypoint, agent_parameters, cancellable);
+ #else
+diff --git a/src/droidy/droidy-client.vala b/src/droidy/droidy-client.vala
+index e34ab90..bedac27 100644
+--- a/src/droidy/droidy-client.vala
++++ b/src/droidy/droidy-client.vala
+@@ -1015,7 +1015,7 @@ namespace Frida.Droidy {
+ 						case "OPEN":
+ 						case "CLSE":
+ 						case "WRTE":
+-							throw new Error.PROTOCOL ("Unexpected command");
++							break; // throw new Error.PROTOCOL ("Unexpected command");
+ 
+ 						default:
+ 							var length = parse_length (command_or_length);
+diff --git a/src/droidy/droidy-host-session.vala b/src/droidy/droidy-host-session.vala
+index 85891fa..e9f9da1 100644
+--- a/src/droidy/droidy-host-session.vala
++++ b/src/droidy/droidy-host-session.vala
+@@ -1044,7 +1044,7 @@ namespace Frida {
+ 
+ 					shell.send_command (("CLASSPATH=%s app_process " +
+ 							"/data/local/tmp " +
+-							"--nice-name=re.frida.helper " +
++							"--nice-name=re.rusda.helper " +
+ 							"re.frida.Helper " +
+ 							"%s; " +
+ 							"rm -f %s; " +
+diff --git a/src/embed-agent.py b/src/embed-agent.py
+index cfb4a59..8d1db3a 100644
+--- a/src/embed-agent.py
++++ b/src/embed-agent.py
+@@ -76,6 +76,7 @@ def main(argv):
+             embedded_agent = priv_dir / f"frida-agent-{flavor}.so"
+             if agent is not None:
+                 shutil.copy(agent, embedded_agent)
++                # Agent 已由 post_process 中的 topatch 处理，此处无需再 patch
+             else:
+                 embedded_agent.write_bytes(b"")
+             embedded_assets += [embedded_agent]
+diff --git a/src/freebsd/freebsd-host-session.vala b/src/freebsd/freebsd-host-session.vala
+index 245747a..3cd11af 100644
+--- a/src/freebsd/freebsd-host-session.vala
++++ b/src/freebsd/freebsd-host-session.vala
+@@ -132,7 +132,7 @@ namespace Frida {
+ 
+ 			var stream_request = Pipe.open (t.local_address, cancellable);
+ 
+-			var id = yield binjector.inject_library_resource (pid, agent_desc, "frida_agent_main",
++			var id = yield binjector.inject_library_resource (pid, agent_desc, "main",
+ 				make_agent_parameters (pid, t.remote_address, options), cancellable);
+ 			injectee_by_pid[pid] = id;
+ 
+diff --git a/src/frida-glue.c b/src/frida-glue.c
+index 6154034..eed80a5 100644
+--- a/src/frida-glue.c
++++ b/src/frida-glue.c
+@@ -56,11 +56,13 @@ frida_init_with_runtime (FridaRuntime rt)
+     g_io_module_openssl_register ();
+ #endif
+ 
++    g_set_prgname ("russell");
++
+     if (runtime == FRIDA_RUNTIME_OTHER)
+     {
+       main_context = g_main_context_ref (g_main_context_default ());
+       main_loop = g_main_loop_new (main_context, FALSE);
+-      main_thread = g_thread_new ("frida-main-loop", run_main_loop, NULL);
++      main_thread = g_thread_new ("rusda-main-loop", run_main_loop, NULL);
+     }
+ 
+     g_once_init_leave (&frida_initialized, TRUE);
+diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
+index 3f5cba7..9a1c442 100644
+--- a/src/linux/linux-host-session.vala
++++ b/src/linux/linux-host-session.vala
+@@ -64,12 +64,12 @@ namespace Frida {
+ 			var blob64 = Frida.Data.Agent.get_frida_agent_64_so_blob ();
+ 			var emulated_arm = Frida.Data.Agent.get_frida_agent_arm_so_blob ();
+ 			var emulated_arm64 = Frida.Data.Agent.get_frida_agent_arm64_so_blob ();
+-			agent = new AgentDescriptor (PathTemplate ("frida-agent-<arch>.so"),
++			agent = new AgentDescriptor (PathTemplate ("rusda-agent-<arch>.so"),
+ 				new Bytes.static (blob32.data),
+ 				new Bytes.static (blob64.data),
+ 				new AgentResource[] {
+-					new AgentResource ("frida-agent-arm.so", new Bytes.static (emulated_arm.data), tempdir),
+-					new AgentResource ("frida-agent-arm64.so", new Bytes.static (emulated_arm64.data), tempdir),
++					new AgentResource ("rusda-agent-arm.so", new Bytes.static (emulated_arm.data), tempdir),
++					new AgentResource ("rusda-agent-arm64.so", new Bytes.static (emulated_arm64.data), tempdir),
+ 				},
+ 				AgentMode.INSTANCED,
+ 				tempdir);
+@@ -387,7 +387,7 @@ namespace Frida {
+ 		protected override async Future<IOStream> perform_attach_to (uint pid, HashTable<string, Variant> options,
+ 				Cancellable? cancellable, out Object? transport) throws Error, IOError {
+ 			uint id;
+-			string entrypoint = "frida_agent_main";
++			string entrypoint = "main";
+ 			string parameters = make_agent_parameters (pid, "", options);
+ 			AgentFeatures features = CONTROL_CHANNEL;
+ 			var linjector = (Linjector) injector;
+@@ -412,10 +412,10 @@ namespace Frida {
+ 			unowned string name;
+ 			switch (cpu_type_from_pid (pid)) {
+ 				case Gum.CpuType.IA32:
+-					name = "frida-agent-arm.so";
++					name = "rusda-agent-arm.so";
+ 					break;
+ 				case Gum.CpuType.AMD64:
+-					name = "frida-agent-arm64.so";
++					name = "rusda-agent-arm64.so";
+ 					break;
+ 				default:
+ 					throw new Error.NOT_SUPPORTED ("Emulated realm is not supported on this architecture");
+diff --git a/src/qnx/qnx-host-session.vala b/src/qnx/qnx-host-session.vala
+index 7d5b3e5..3d7fb98 100644
+--- a/src/qnx/qnx-host-session.vala
++++ b/src/qnx/qnx-host-session.vala
+@@ -117,7 +117,7 @@ namespace Frida {
+ 
+ 			var stream_request = Pipe.open (t.local_address, cancellable);
+ 
+-			var id = yield qinjector.inject_library_resource (pid, agent_desc, "frida_agent_main",
++			var id = yield qinjector.inject_library_resource (pid, agent_desc, "main",
+ 				make_agent_parameters (pid, t.remote_address, options), cancellable);
+ 			injectee_by_pid[pid] = id;
+ 
+diff --git a/src/topatch.py b/src/topatch.py
+new file mode 100644
+index 0000000..0f499d5
+--- /dev/null
++++ b/src/topatch.py
+@@ -0,0 +1,71 @@
++import lief
++import sys
++import random
++import os
++
++
++def log_color(msg):
++    print(f"\033[1;31;40m{msg}\033[0m")
++
++
++if __name__ == "__main__":
++    input_file = sys.argv[1]
++
++    log_color(f"[*] Patch frida-agent: {input_file}")
++    binary = lief.parse(input_file)
++
++    random_name = "rusda"
++    log_color(f"[*] Patch `frida` to `{random_name}`")
++
++    if not binary:
++        log_color(f"[*] Not ELF, exit")
++        sys.exit(1)
++    else:
++        for symbol in binary.symbols:
++            if symbol.name == "frida_agent_main":
++                symbol.name = "main"
++            if "frida" in symbol.name:
++                symbol.name = symbol.name.replace("frida", random_name)
++            if "FRIDA" in symbol.name:
++                symbol.name = symbol.name.replace("FRIDA", random_name)
++
++        all_patch_string = ["FridaScriptEngine", "GLib-GIO", "GDBusProxy", "GumScript"]  # 字符串特征修改 尽量与源字符一样
++
++        for section in binary.sections:
++            if section.name != ".rodata":
++                continue
++            for patch_str in all_patch_string:
++                addr_all = section.search_all(patch_str)  # Patch 内存字符串
++
++                for addr in addr_all:
++                    patch = [ord(n) for n in list(patch_str)[::-1]]
++                    log_color(
++                        f"[*] Patching section name={section.name} offset={hex(section.file_offset + addr)} orig:{patch_str} new:{''.join(list(patch_str)[::-1])}")
++                    binary.patch_address(section.file_offset + addr, patch)
++
++        binary.write(input_file)
++
++        # thread_gum_js_loop
++        random_name = "russellloop"
++        log_color(f"[*] Patch `gum-js-loop` to `{random_name}`")
++        os.system(f"sed -b -i s/gum-js-loop/{random_name}/g {input_file}")
++
++        random_name = "rmain"
++        log_color(f"[*] Patch `gmain` to `{random_name}`")
++        os.system(f"sed -b -i s/gmain/{random_name}/g {input_file}")
++
++        random_name = "rubus"
++        log_color(f"[*] Patch `gdbus` to `{random_name}`")
++        os.system(f"sed -b -i s/gdbus/{random_name}/g {input_file}")
++
++        # 注：frida-gadget 不可全局 sed，会破坏 injector 的 frida-gadget-tcp- 匹配；gadget.glue 线程名已由 gadget.vala Obfuscate 处理
++
++        # 仅做 rusda 式二进制 patch，不改协议（re.frida.*、frida:rpc 等），保证与标准 frida 客户端兼容
++
++        # SONAME 残留特征：libfrida-gadget-raw.so / libfrida-agent-raw.so
++        # 等长替换（frida->rusda 均 5 字节），不改变 ELF 结构，安全。issue #9 (fh2002)
++        for raw_name in ["libfrida-gadget-raw", "libfrida-agent-raw"]:
++            new_raw = raw_name.replace("frida", "rusda")
++            log_color(f"[*] Patch `{raw_name}` to `{new_raw}`")
++            os.system(f"sed -b -i s/{raw_name}/{new_raw}/g {input_file}")
++        log_color(f"[*] Patch Finish")
+diff --git a/src/windows/windows-host-session.vala b/src/windows/windows-host-session.vala
+index 167ea74..f3170c1 100644
+--- a/src/windows/windows-host-session.vala
++++ b/src/windows/windows-host-session.vala
+@@ -251,7 +251,7 @@ namespace Frida {
+ 
+ 			var winjector = injector as Winjector;
+ #if HAVE_EMBEDDED_ASSETS
+-			var id = yield winjector.inject_library_resource (pid, agent, "frida_agent_main",
++			var id = yield winjector.inject_library_resource (pid, agent, "main",
+ 				make_agent_parameters (pid, t.remote_address, options), cancellable);
+ #else
+ 			var id = yield winjector.inject_library_file_with_template (pid,
+diff --git a/tools/post-process.py b/tools/post-process.py
+index 4d0cd49..c057da2 100644
+--- a/tools/post-process.py
++++ b/tools/post-process.py
+@@ -67,6 +67,13 @@ def main(argv):
+             api_level = 19 if host_abi in {"x86", "arm"} else 21
+             subprocess.run(termux_elf_cleaner + ["--api-level", str(api_level), "--quiet", intermediate_path],
+                            **run_kwargs)
++
++        # 内存特征 patch：对 Linux/Android 的 shared-library 和 executable 运行 topatch，规避内存扫描检测
++        if host_os in {"linux", "android"} and kind in {"shared-library", "executable"}:
++            topatch = Path(__file__).resolve().parent.parent / "src" / "topatch.py"
++            if topatch.exists():
++                # 不使用 PIPE，让 topatch 输出到终端/日志，便于确认 patch 已执行
++                subprocess.run([sys.executable, str(topatch), str(intermediate_path)], check=True)
+     except subprocess.CalledProcessError as e:
+         print(e, file=sys.stderr)
+         print("Output:\n\t| " + "\n\t| ".join(e.output.strip().split("\n")), file=sys.stderr)

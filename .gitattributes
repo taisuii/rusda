@@ -1,8 +1,7 @@
 # 构建关键文件必须使用 LF 行尾，否则在 Linux 构建机上：
 #  - *.sh 会因 \r 报 "$'\r': command not found"
 #  - *.patch 用 git apply 打到 LF 的官方 frida 源码上会因 CRLF 不匹配而失败
-# （历史上这些文件被 Windows 提交意外转成了 CRLF）
-*.sh                              text eol=lf
-17.6.2/patches/deliver/*.patch   text eol=lf
-17.6.2/tools/*.py                text eol=lf
-17.6.2/src/*.py                  text eol=lf
+# （历史上部分文件被 Windows 提交意外转成了 CRLF）
+*.sh      text eol=lf
+*.patch   text eol=lf
+*.py      text eol=lf
